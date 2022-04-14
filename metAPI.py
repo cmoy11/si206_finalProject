@@ -2,7 +2,6 @@ import requests
 import sqlite3
 import os
 from bs4 import BeautifulSoup
-import time
 
 def create_database(name):
     path = os.path.dirname(os.path.abspath(__file__))
@@ -12,22 +11,40 @@ def create_database(name):
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS Artwork
-        (objectID INTEGER PRIMARY KEY, imageURL STRING, title STRING, cityID INTEGER, artistName STRING, artistNationality STRING, artworkYear INTEGER, medium STRING)
+        (objectID INTEGER PRIMARY KEY, cityID INTEGER, artworkYearID INTEGER, imageURL STRING, title STRING, artistName STRING, artistNationality STRING, medium STRING)
         """
     )
     conn.commit()
 
     cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS Countries
-        (ID INTEGER PRIMARY KEY, country STRING)
+        CREATE TABLE IF NOT EXISTS Cities
+        (ID INTEGER PRIMARY KEY, city STRING)
         """
     )
     conn.commit()
 
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS Years
+        (ID INTEGER PRIMARY KEY, yearRange STRING)
+        """
+    )
+    conn.commit()
+
+    year_range = [('pre-1700',1), ('1700-1799',2), ('1800-1899',3), ('1900-present',4)]
+    for tup in year_range:
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO Years (ID, yearRange)
+            VALUES (?, ?)
+            """, (tup[1], tup[0])
+        )
+        conn.commit()
+
     return cur, conn
 
-def get_countries(start, end, cur, conn):
+def get_cities (start, end, cur, conn):
     url="https://worldpopulationreview.com/world-cities"
     html_content = requests.get(url).text
 
@@ -35,18 +52,18 @@ def get_countries(start, end, cur, conn):
     table = soup.find('table', class_ = "jsx-130793")
     rows = table.find_all('tr')
 
-    country_dict = {}
+    city_dict = {}
     for row in rows[start + 1:end + 1]:
         data = row.find_all('td',)
         key = data[0].text.strip()
         value = data[1].text.strip()
-        country_dict[int(key) - 1] = value
-    list = [(k, v) for k, v in country_dict.items()]
+        city_dict[int(key) - 1] = value
+    list = [(k, v) for k, v in city_dict.items()]
 
     for i in range(25):
         cur.execute(
             """
-            INSERT OR IGNORE INTO Countries (ID, country)
+            INSERT OR IGNORE INTO Cities (ID, city)
             VALUES (?, ?)
             """, (int(list[i][0]), list[i][1])
         )
@@ -66,32 +83,42 @@ def get_API(city_list, cur, conn):
         if ids == None:
             print('No artwork found for this city')
             continue
-        elif len(ids) < 25:
-            good_ids = ids
-        else:
-            good_ids = ids[:25]
 
         objects = []
-        for id in good_ids:
+        for id in ids:
+            if  len(objects) == 25:
+                print('25 objects reached')
+                break
             resp = requests.get(f'https://collectionapi.metmuseum.org/public/collection/v1/objects/{id}')
-            objects.append(resp.json())
+            
+            try:
+                if resp.json()['primaryImage']:
+                    objects.append(resp.json())
+                    print('valid response')
+                else:
+                    print('object does not have image url')
+            except:
+                print("inproperly formatted response")
+                print(resp.json())
         
         for obj in objects:
-            if obj['primaryImage']:
-                try:
-                    cur.execute(
-                        """
-                        INSERT OR IGNORE INTO Artwork (objectID, imageURL, title, cityID, artistName, artistNationality, artworkYear, medium)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (obj['objectID'], obj['primaryImage'], obj['title'], city_id, obj['artistDisplayName'], obj['artistNationality'], obj['objectEndDate'], obj['medium'])
-                    )
-                    conn.commit()
-                    print('added to database')
-                except:
-                    print("error")
-                    print(obj)
+            if int(obj['objectEndDate']) < 1700:
+                year_id = 1
+            elif int(obj['objectEndDate']) < 1800:
+                year_id = 2
+            elif int(obj['objectEndDate']) < 1900:
+                year_id = 3
             else:
-                print('object does not have image url')
+                year_id = 4
+            
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO Artwork (objectID, cityID, artworkYearID, imageURL, title, artistName, artistNationality, medium)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (obj['objectID'], city_id, year_id, obj['primaryImage'], obj['title'], obj['artistDisplayName'], obj['artistNationality'], obj['medium'])
+            )
+            conn.commit()
+            print('added to database')
         print('done adding to database')
         
 def main():
@@ -104,7 +131,7 @@ def main():
 
     cur.execute(
         """
-        SELECT count(id) FROM Countries
+        SELECT count(id) FROM Cities
         """
     )
     conn.commit()
@@ -113,28 +140,22 @@ def main():
     print(length)
     
     if length < 25:
-        countries = get_countries(first['start'], first['end'], cur, conn)
-        print(countries)
-        get_API(countries, cur, conn)
+        cities = get_cities(first['start'], first['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
     elif length < 50:
-        countries = get_countries(second['start'], second['end'], cur, conn)
-        print(countries)
-        get_API(countries, cur, conn)
+        cities = get_cities(second['start'], second['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
     elif length < 75:
-        countries = get_countries(third['start'], third['end'], cur, conn)
-        print(countries)
-        get_API(countries, cur, conn)
+        cities = get_cities(third['start'], third['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
     else:
-        countries = get_countries(fourth['start'], fourth['end'], cur, conn)
-        print(countries)
-        get_API(countries, cur, conn)
+        cities = get_cities(fourth['start'], fourth['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
     print('done')
-
-    # print("done creating the database")
-    # countries = get_countries(cur, conn)
-    # get_API(countries, cur, conn)
-    # print("done")
-
 
 if __name__ == '__main__':
     main()
