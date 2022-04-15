@@ -120,7 +120,21 @@ def get_API(city_list, cur, conn):
             conn.commit()
             print('added to database')
         print('done adding to database')
-        
+
+def get_artwork_data(cur, conn):
+    cur.execute(
+        """
+        SELECT Cities.city, Years.yearRange, Artwork.imageURL
+        FROM Artwork
+        JOIN Cities
+        ON Artwork.cityID = Cities.ID
+        JOIN Years
+        ON Artwork.artworkYearID = Years.ID
+        """
+    )
+    conn.commit()
+    return cur.fetchall()
+
 def main():
     cur, conn = create_database('met.db')
 
@@ -155,6 +169,11 @@ def main():
         cities = get_cities(fourth['start'], fourth['end'], cur, conn)
         print(cities)
         get_API(cities, cur, conn)
+    print('database addition complete')
+    
+    artwork = get_artwork_data(cur, conn)
+    print(artwork)
+    
     print('done')
 
 if __name__ == '__main__':
