@@ -1,7 +1,9 @@
 import requests
 import sqlite3
 import os
+from os.path import exists
 from bs4 import BeautifulSoup
+import shutil
 
 def create_database(name):
     path = os.path.dirname(os.path.abspath(__file__))
@@ -124,7 +126,7 @@ def get_API(city_list, cur, conn):
 def get_artwork_data(cur, conn):
     cur.execute(
         """
-        SELECT Cities.city, Years.yearRange, Artwork.imageURL
+        SELECT Artwork.objectID, Cities.city, Years.yearRange, Artwork.imageURL
         FROM Artwork
         JOIN Cities
         ON Artwork.cityID = Cities.ID
@@ -135,44 +137,61 @@ def get_artwork_data(cur, conn):
     conn.commit()
     return cur.fetchall()
 
+def download_image(objectID, image_url):
+    if not os.path.exists(f"images/{objectID}.jpg"):
+        filename = f"images/{objectID}.jpg"
+        r = requests.get(image_url, stream = True)
+        try:
+            r.raw.decode_content  = True
+            with open(filename, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+            print('Image sucessfully downloaded')
+        except:
+            print('Image failed to download')
+            print(filename)
+    else:
+        print('file already exists')
+
 def main():
     cur, conn = create_database('met.db')
 
-    first = {'start': 0, 'end': 25}
-    second = {'start': 25, 'end': 50}
-    third = {'start': 50, 'end': 75}
-    fourth = {'start': 75, 'end': 100}
+    # first = {'start': 0, 'end': 25}
+    # second = {'start': 25, 'end': 50}
+    # third = {'start': 50, 'end': 75}
+    # fourth = {'start': 75, 'end': 100}
 
-    cur.execute(
-        """
-        SELECT count(id) FROM Cities
-        """
-    )
-    conn.commit()
-    data = cur.fetchall()
-    length = data[0][0]
-    print(length)
+    # cur.execute(
+    #     """
+    #     SELECT count(id) FROM Cities
+    #     """
+    # )
+    # conn.commit()
+    # data = cur.fetchall()
+    # length = data[0][0]
+    # print(length)
     
-    if length < 25:
-        cities = get_cities(first['start'], first['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    elif length < 50:
-        cities = get_cities(second['start'], second['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    elif length < 75:
-        cities = get_cities(third['start'], third['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    else:
-        cities = get_cities(fourth['start'], fourth['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    print('database addition complete')
+    # if length < 25:
+    #     cities = get_cities(first['start'], first['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # elif length < 50:
+    #     cities = get_cities(second['start'], second['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # elif length < 75:
+    #     cities = get_cities(third['start'], third['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # else:
+    #     cities = get_cities(fourth['start'], fourth['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # print('database addition complete')
     
     artwork = get_artwork_data(cur, conn)
-    print(artwork)
+
+    for art in artwork:
+        download_image(art[0], art[3])
     
     print('done')
 
