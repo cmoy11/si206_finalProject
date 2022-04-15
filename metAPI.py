@@ -62,7 +62,7 @@ def get_cities (start, end, cur, conn):
         city_dict[int(key) - 1] = value
     list = [(k, v) for k, v in city_dict.items()]
 
-    for i in range(25):
+    for i in range(len(list)):
         cur.execute(
             """
             INSERT OR IGNORE INTO Cities (ID, city)
@@ -155,38 +155,48 @@ def download_image(objectID, image_url):
 def main():
     cur, conn = create_database('met.db')
 
-    # first = {'start': 0, 'end': 25}
-    # second = {'start': 25, 'end': 50}
-    # third = {'start': 50, 'end': 75}
-    # fourth = {'start': 75, 'end': 100}
+    first = {'start': 0, 'end': 25}
+    second = {'start': 25, 'end': 28}
+    third = {'start': 28, 'end': 35}
+    fourth = {'start': 35, 'end': 50}
+    fifth = {'start': 50, 'end': 75}
+    sixth = {'start': 75, 'end': 100}
 
-    # cur.execute(
-    #     """
-    #     SELECT count(id) FROM Cities
-    #     """
-    # )
-    # conn.commit()
-    # data = cur.fetchall()
-    # length = data[0][0]
-    # print(length)
+    cur.execute(
+        """
+        SELECT count(id) FROM Cities
+        """
+    )
+    conn.commit()
+    data = cur.fetchall()
+    length = data[0][0]
+    print(length)
     
-    # if length < 25:
-    #     cities = get_cities(first['start'], first['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # elif length < 50:
-    #     cities = get_cities(second['start'], second['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # elif length < 75:
-    #     cities = get_cities(third['start'], third['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # else:
-    #     cities = get_cities(fourth['start'], fourth['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # print('database addition complete')
+    if length < 25:
+        cities = get_cities(first['start'], first['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
+    elif length < 28:
+        cities = get_cities(second['start'], second['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
+    elif length < 35:
+        cities = get_cities(third['start'], third['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
+    elif length < 50:
+        cities = get_cities(fourth['start'], fourth['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
+    elif length < 75:
+        cities = get_cities(fifth['start'], fifth['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
+    else:
+        cities = get_cities(sixth['start'], sixth['end'], cur, conn)
+        print(cities)
+        get_API(cities, cur, conn)
+    print('database addition complete')
     
     artwork = get_artwork_data(cur, conn)
 
