@@ -84,8 +84,9 @@ def euclidean(p, q):
 
 def get_points(image_path):
   # if running on someone else's computer, change everything before /si206_finalProject/images to their own filepath
-  path = r"/Users/alanyang/Desktop/206/si206_finalProject/images"
-  img = Image.open(path+"/"+image_path)  
+  path = os.path.dirname(os.path.abspath(__file__))
+  print(path+"/images/"+image_path)
+  img = Image.open(path+"/images/"+image_path)  
   # img = Image.open(image_path)
   img.thumbnail((200, 400))
   img = img.convert("RGB")
