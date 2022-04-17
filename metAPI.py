@@ -10,6 +10,7 @@ from matplotlib import image
 from PIL import Image
 from IPython.display import Image as CImage
 from os import listdir
+import csv
 
 def create_database(name):
     path = os.path.dirname(os.path.abspath(__file__))
@@ -246,7 +247,6 @@ def get_points(image_path):
 
 def rgb_to_hex(rgb):
   return '#%s' % ''.join(('%02x' % p for p in rgb))
-#End copied code
 
 def get_colors(filename, n_colors=3):
   points = get_points(filename)
@@ -255,6 +255,7 @@ def get_colors(filename, n_colors=3):
   rgbs = [map(int, c.center.coordinates) for c in clusters]
   initial_hex_list = list(map(rgb_to_hex, rgbs))
   return initial_hex_list
+#End copied code
     
 def hex_to_rgb(initial_hex_list):    
     final_rgbs = []
@@ -284,73 +285,73 @@ def add_colors(cur, conn):
     image_hex_list = []
     for a in artwork:
         try:
+            cur.execute(
+                """
+                SELECT color1
+                FROM Artwork
+                WHERE color1 IS NULL
+                """
+            )
+            conn.commit()
+            checker = cur.fetchall()
+
             object_id = a[0]
             city = a[1]
             yearRange = a[2]
-            # print("COLORS is ")
-            colors = get_colors(str(object_id) + '.jpg', n_colors=3)
-            rgbs = hex_to_rgb(colors)
-            # print("RGBS ARE ")
-            # print(rgbs)
-
-            x = range(3)
-            r = 0
-            g = 0
-            b = 0
-            for i in x:
-                r += rgbs[i][0]
-                g += rgbs[i][1]
-                b += rgbs[i][2]
-
-            avg_red = r//3
-            avg_green = g//3
-            avg_blue = b//3
-            # print("done computing avgs")
+            
+            if checker != []:
+                colors = get_colors(str(object_id) + '.jpg', n_colors=3)
+                cur.execute(
+                    """
+                    UPDATE Artwork
+                    SET color1  = ?, color2 = ?, color3  = ?
+                    WHERE objectID = ?
+                    AND color1 IS NULL
+                    """, (colors[0], colors[1], colors[2], object_id)
+                )
+                conn.commit()
+                print(colors)
+            else:
+                print('color already added to the database')
+                cur.execute(
+                """
+                SELECT color1, color2, color3
+                FROM Artwork
+                WHERE objectID = ?
+                """, (object_id,)
+                )
+                conn.commit()
+                tup_colors = cur.fetchall()
+                colors = [tup_colors[0][0], tup_colors[0][1], tup_colors[0][2]]
 
             image_hex_list.append((object_id, city, yearRange, colors))
-            cur.execute(
-                """
-                UPDATE Artwork
-                SET color1 = ?, color2 = ?, color3 = ?
-                WHERE objectID = ?
-                """, (colors[0], colors[1], colors[2], object_id)
-            ) 
-            # print("before committing")
-            conn.commit()
-            # print("DONEEE")
-            # print(colors)
-        
         except:
             print(f'error gathering colors from {object_id}.jpg')
-            cur.execute(
-                """
-                DELETE FROM Artwork WHERE objectID = ?
-                """, (object_id,)
-            )
+            # cur.execute(
+            #     """
+            #     DELETE FROM Artwork WHERE objectID = ?
+            #     """, (object_id,)
+            # )
     return image_hex_list
 
 # make sure this function is called after add_colors so then you won't have to all download_image again
-def make_dictionary(cur, conn):
+def make_dictionary(input_colors, cur, conn):
     city_dict = {}
     time_period_dict = {}
 
-    artwork = get_artwork_data(cur, conn)
-    image_hex_list = []
-
-    for a in artwork:
+    for a in input_colors:
         try:
             object_id = a[0]
             city = a[1]
             timePeriod = a[2]
+            colors  = a[3]
 
-            colors = get_colors(str(object_id) + '.jpg', n_colors=3)
             rgbs = hex_to_rgb(colors)
 
-            x = range(3)
             r = 0
             g = 0
             b = 0
-            for i in x:
+            for i in range(3):
                 r += rgbs[i][0]
                 g += rgbs[i][1]
                 b += rgbs[i][2]
@@ -381,11 +382,11 @@ def make_dictionary(cur, conn):
 
         except:
             print(f'MAKE DICTIONARY ERROR. error gathering colors from {object_id}.jpg')
-            cur.execute(
-                """
-                DELETE FROM Artwork WHERE objectID = ?
-                """, (object_id,)
-            )
+            # cur.execute(
+            #     """
+            #     DELETE FROM Artwork WHERE objectID = ?
+            #     """, (object_id,)
+            # )
     # go through city dictionary and calculate the average
     for city in city_dict:
         city_dict[city]["red"] = city_dict[city].get("red") // city_dict[city].get("num_pieces")
@@ -401,60 +402,85 @@ def make_dictionary(cur, conn):
     # print(time_period_dict)
     return city_dict, time_period_dict
 
+def write_csv(city_dict, time_period_dict):
+    with open("met_city.csv", "w") as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(['city', 'number of pieces', 'average red value', 'average green value', 'average blue value'])
+        for key in city_dict:
+            city = key
+            num = city_dict[key]['num_pieces']
+            red = city_dict[key]['red']
+            green = city_dict[key]['green']
+            blue = city_dict[key]['blue']
+            csvwriter.writerow([city, num, red, green, blue])
+
+    with open("met_time.csv", "w") as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(['time period', 'number of pieces', 'average red value', 'average green value', 'average blue value'])
+        for key in time_period_dict:
+            time = key
+            num = time_period_dict[key]['num_pieces']
+            red = time_period_dict[key]['red']
+            green = time_period_dict[key]['green']
+            blue = time_period_dict[key]['blue']
+            csvwriter.writerow([time, num, red, green, blue])
+
 def main():
     cur, conn = create_database('met.db')
 
-    first = {'start': 0, 'end': 25}
-    second = {'start': 25, 'end': 28}
-    third = {'start': 28, 'end': 35}
-    fourth = {'start': 35, 'end': 50}
-    fifth = {'start': 50, 'end': 75}
-    sixth = {'start': 75, 'end': 100}
+    # first = {'start': 0, 'end': 25}
+    # second = {'start': 25, 'end': 28}
+    # third = {'start': 28, 'end': 35}
+    # fourth = {'start': 35, 'end': 50}
+    # fifth = {'start': 50, 'end': 75}
+    # sixth = {'start': 75, 'end': 100}
 
-    cur.execute(
-        """
-        SELECT count(id) FROM Cities
-        """
-    )
-    conn.commit()
-    data = cur.fetchall()
-    length = data[0][0]
-    print(length)
+    # cur.execute(
+    #     """
+    #     SELECT count(id) FROM Cities
+    #     """
+    # )
+    # conn.commit()
+    # data = cur.fetchall()
+    # length = data[0][0]
+    # print(length)
     
-    if length < 25:
-        cities = get_cities(first['start'], first['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    elif length < 28:
-        cities = get_cities(second['start'], second['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    elif length < 35:
-        cities = get_cities(third['start'], third['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    elif length < 50:
-        cities = get_cities(fourth['start'], fourth['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    elif length < 75:
-        cities = get_cities(fifth['start'], fifth['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    else:
-        cities = get_cities(sixth['start'], sixth['end'], cur, conn)
-        print(cities)
-        get_API(cities, cur, conn)
-    print('database addition complete')
-    
+    # if length < 25:
+    #     cities = get_cities(first['start'], first['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # elif length < 28:
+    #     cities = get_cities(second['start'], second['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # elif length < 35:
+    #     cities = get_cities(third['start'], third['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # elif length < 50:
+    #     cities = get_cities(fourth['start'], fourth['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # elif length < 75:
+    #     cities = get_cities(fifth['start'], fifth['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # else:
+    #     cities = get_cities(sixth['start'], sixth['end'], cur, conn)
+    #     print(cities)
+    #     get_API(cities, cur, conn)
+    # print('database addition complete')
+
     colors = add_colors(cur, conn)
-    print(colors)
-    dictionaries = make_dictionary(cur, conn)
-    city_dict = dictionaries[0]
-    time_period_dict = dictionaries[1]
+    print("done adding colors")
+    
+    city_dict, time_period_dict = make_dictionary(colors, cur, conn)
+    print(time_period_dict)
+    
+    write_csv(city_dict, time_period_dict)
 
     # visualization function 
-    visualize(city_dict, time_period_dict) # make this
+    # visualize(city_dict, time_period_dict) # make this
 
     # print(hex_to_rgb(['#e4a4e5', '#412649', '#727299']))
     
