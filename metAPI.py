@@ -247,22 +247,30 @@ def get_points(image_path):
 
 def rgb_to_hex(rgb):
   return '#%s' % ''.join(('%02x' % p for p in rgb))
+#End copied code
 
 def get_colors(filename, n_colors=3):
   points = get_points(filename)
   clusters = KMeans(n_clusters=n_colors).fit(points)
   clusters.sort(key=lambda c: len(c.points), reverse = True)
   rgbs = [map(int, c.center.coordinates) for c in clusters]
-  inital_hex_list =  list(map(rgb_to_hex, rgbs))
-  final_rgbs = []
-  for i in inital_hex_list:
-    r_hex = i[1:3]
-    g_hex = i[3:5]
-    b_hex = i[5:7]
-    final_rgbs.append(int(hex, r_hex), int(hex, g_hex), int(hex, b_hex))
-    return final_rgbs
+  return list(map(rgb_to_hex, rgbs))
+#End coopied code
     
-#End copied code
+def hex_to_dec(initial_hex_list):    
+    final_rgbs = []
+    for i in initial_hex_list:
+        rgb = []
+        r_hex = i[1:3]
+        g_hex = i[3:5]
+        b_hex = i[5:7]
+        rgb.append(int(r_hex, 16))
+        rgb.append(int(g_hex, 16))
+        rgb.append(int(b_hex, 16))
+        final_rgbs.append(rgb)
+    return final_rgbs
+
+print(hex_to_dec(['#e4e4e4', '#414141', '#727272']))
 
 def get_color(file):
     colors = get_colors(file, n_colors=5)
@@ -351,5 +359,5 @@ def main():
     
     print('done')
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
