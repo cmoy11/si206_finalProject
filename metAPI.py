@@ -57,7 +57,7 @@ def get_cities (start, end, cur, conn):
     html_content = requests.get(url).text
 
     soup = BeautifulSoup(html_content, "lxml")
-    table = soup.find('table', class_ = "jsx-130793")
+    table = soup.find('table', class_ = "jsx-2006211681")
     rows = table.find_all('tr')
 
     city_dict = {}
@@ -253,8 +253,16 @@ def get_colors(filename, n_colors=3):
   clusters = KMeans(n_clusters=n_colors).fit(points)
   clusters.sort(key=lambda c: len(c.points), reverse = True)
   rgbs = [map(int, c.center.coordinates) for c in clusters]
-  return list(map(rgb_to_hex, rgbs))
-#End coopied code
+  inital_hex_list =  list(map(rgb_to_hex, rgbs))
+  final_rgbs = []
+  for i in inital_hex_list:
+    r_hex = i[1:3]
+    g_hex = i[3:5]
+    b_hex = i[5:7]
+    final_rgbs.append(int(hex, r_hex), int(hex, g_hex), int(hex, b_hex))
+    return final_rgbs
+    
+#End copied code
 
 def get_color(file):
     colors = get_colors(file, n_colors=5)
