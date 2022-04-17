@@ -49,7 +49,6 @@ def create_database(name):
             """, (tup[1], tup[0])
         )
         conn.commit()
-
     return cur, conn
 
 def get_cities (start, end, cur, conn):
@@ -254,10 +253,10 @@ def get_colors(filename, n_colors=3):
   clusters = KMeans(n_clusters=n_colors).fit(points)
   clusters.sort(key=lambda c: len(c.points), reverse = True)
   rgbs = [map(int, c.center.coordinates) for c in clusters]
-  return list(map(rgb_to_hex, rgbs))
-#End coopied code
+  initial_hex_list = list(map(rgb_to_hex, rgbs))
+  return initial_hex_list
     
-def hex_to_dec(initial_hex_list):    
+def hex_to_rgb(initial_hex_list):    
     final_rgbs = []
     for i in initial_hex_list:
         rgb = []
@@ -270,11 +269,11 @@ def hex_to_dec(initial_hex_list):
         final_rgbs.append(rgb)
     return final_rgbs
 
-print(hex_to_dec(['#e4e4e4', '#414141', '#727272']))
+# print(hex_to_dec(['#e4e4e4', '#414141', '#727272']))
 
-def get_color(file):
-    colors = get_colors(file, n_colors=5)
-    return colors
+# def get_color(file):
+#     colors = get_colors(file, n_colors=5)
+#     return colors
 
 def add_colors(cur, conn):
     artwork = get_artwork_data(cur, conn)
@@ -288,17 +287,39 @@ def add_colors(cur, conn):
             object_id = a[0]
             city = a[1]
             yearRange = a[2]
+            # print("COLORS is ")
             colors = get_colors(str(object_id) + '.jpg', n_colors=3)
+            rgbs = hex_to_rgb(colors)
+            # print("RGBS ARE ")
+            # print(rgbs)
+
+            x = range(3)
+            r = 0
+            g = 0
+            b = 0
+            for i in x:
+                r += rgbs[i][0]
+                g += rgbs[i][1]
+                b += rgbs[i][2]
+
+            avg_red = r//3
+            avg_green = g//3
+            avg_blue = b//3
+            # print("done computing avgs")
+
             image_hex_list.append((object_id, city, yearRange, colors))
             cur.execute(
                 """
                 UPDATE Artwork
-                SET color1  = ?, color2 = ?, color3  = ?
+                SET color1 = ?, color2 = ?, color3 = ?
                 WHERE objectID = ?
                 """, (colors[0], colors[1], colors[2], object_id)
-            )
+            ) 
+            # print("before committing")
             conn.commit()
-            print(colors)
+            # print("DONEEE")
+            # print(colors)
+        
         except:
             print(f'error gathering colors from {object_id}.jpg')
             cur.execute(
@@ -307,6 +328,78 @@ def add_colors(cur, conn):
                 """, (object_id,)
             )
     return image_hex_list
+
+# make sure this function is called after add_colors so then you won't have to all download_image again
+def make_dictionary(cur, conn):
+    city_dict = {}
+    time_period_dict = {}
+
+    artwork = get_artwork_data(cur, conn)
+    image_hex_list = []
+
+    for a in artwork:
+        try:
+            object_id = a[0]
+            city = a[1]
+            timePeriod = a[2]
+
+            colors = get_colors(str(object_id) + '.jpg', n_colors=3)
+            rgbs = hex_to_rgb(colors)
+
+            x = range(3)
+            r = 0
+            g = 0
+            b = 0
+            for i in x:
+                r += rgbs[i][0]
+                g += rgbs[i][1]
+                b += rgbs[i][2]
+
+            avg_red = r//3
+            avg_green = g//3
+            avg_blue = b//3
+            
+            # put each value in the dictionaries
+            # fill cities dictionary
+            if city not in city_dict:
+                city_dict[city] = {"red": avg_red, "green": avg_green, "blue": avg_blue, "num_pieces": 1}
+            else:
+                city_dict[city]["red"] = city_dict[city].get("red") + avg_red
+                city_dict[city]["green"] = city_dict[city].get("green") + avg_green
+                city_dict[city]["blue"] = city_dict[city].get("blue") + avg_blue
+                city_dict[city]["num_pieces"] += 1
+            
+            # repeat for time period
+            if timePeriod not in time_period_dict:
+                time_period_dict[timePeriod] = {"red": avg_red, "green": avg_green, "blue": avg_blue, "num_pieces": 1}
+            else:
+                time_period_dict[timePeriod]["red"] = time_period_dict[timePeriod].get("red") + avg_red
+                time_period_dict[timePeriod]["green"] = time_period_dict[timePeriod].get("green") + avg_green
+                time_period_dict[timePeriod]["blue"] = time_period_dict[timePeriod].get("blue") + avg_blue
+                time_period_dict[timePeriod]["num_pieces"] += 1
+
+
+        except:
+            print(f'MAKE DICTIONARY ERROR. error gathering colors from {object_id}.jpg')
+            cur.execute(
+                """
+                DELETE FROM Artwork WHERE objectID = ?
+                """, (object_id,)
+            )
+    # go through city dictionary and calculate the average
+    for city in city_dict:
+        city_dict[city]["red"] = city_dict[city].get("red") // city_dict[city].get("num_pieces")
+        city_dict[city]["green"] = city_dict[city].get("green") // city_dict[city].get("num_pieces")
+        city_dict[city]["blue"] = city_dict[city].get("blue") // city_dict[city].get("num_pieces")
+    # go through time period dictionary and calculate the average
+    for time_period in time_period_dict:
+        time_period_dict[time_period]["red"] = time_period_dict[time_period].get("red") // time_period_dict[time_period].get("num_pieces")
+        time_period_dict[time_period]["green"] = time_period_dict[time_period].get("green") // time_period_dict[time_period].get("num_pieces")
+        time_period_dict[time_period]["blue"] = time_period_dict[time_period].get("blue") // time_period_dict[time_period].get("num_pieces")
+    
+    # print(city_dict)
+    # print(time_period_dict)
+    return city_dict, time_period_dict
 
 def main():
     cur, conn = create_database('met.db')
@@ -356,8 +449,16 @@ def main():
     
     colors = add_colors(cur, conn)
     print(colors)
+    dictionaries = make_dictionary(cur, conn)
+    city_dict = dictionaries[0]
+    time_period_dict = dictionaries[1]
+
+    # visualization function 
+    visualize(city_dict, time_period_dict) # make this
+
+    # print(hex_to_rgb(['#e4a4e5', '#412649', '#727299']))
     
     print('done')
 
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()
