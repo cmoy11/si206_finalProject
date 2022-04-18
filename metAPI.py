@@ -327,11 +327,11 @@ def add_colors(cur, conn):
             image_hex_list.append((object_id, city, yearRange, colors))
         except:
             print(f'error gathering colors from {object_id}.jpg')
-            # cur.execute(
-            #     """
-            #     DELETE FROM Artwork WHERE objectID = ?
-            #     """, (object_id,)
-            # )
+            cur.execute(
+                """
+                DELETE FROM Artwork WHERE objectID = ?
+                """, (object_id,)
+            )
     return image_hex_list
 
 # make sure this function is called after add_colors so then you won't have to all download_image again
@@ -382,11 +382,7 @@ def make_dictionary(input_colors, cur, conn):
 
         except:
             print(f'MAKE DICTIONARY ERROR. error gathering colors from {object_id}.jpg')
-            # cur.execute(
-            #     """
-            #     DELETE FROM Artwork WHERE objectID = ?
-            #     """, (object_id,)
-            # )
+            
     # go through city dictionary and calculate the average
     for city in city_dict:
         city_dict[city]["red"] = city_dict[city].get("red") // city_dict[city].get("num_pieces")
@@ -406,7 +402,7 @@ def write_csv(city_dict, time_period_dict):
     with open("met_city.csv", "w") as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(['city', 'number of pieces', 'average red value', 'average green value', 'average blue value'])
-        for key in city_dict:
+        for key in sorted(city_dict.keys(), reverse=True, key = lambda x:city_dict[x]['num_pieces']):
             city = key
             num = city_dict[key]['num_pieces']
             red = city_dict[key]['red']
@@ -417,7 +413,7 @@ def write_csv(city_dict, time_period_dict):
     with open("met_time.csv", "w") as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(['time period', 'number of pieces', 'average red value', 'average green value', 'average blue value'])
-        for key in time_period_dict:
+        for key in sorted(time_period_dict.keys()):
             time = key
             num = time_period_dict[key]['num_pieces']
             red = time_period_dict[key]['red']
