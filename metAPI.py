@@ -11,6 +11,8 @@ from PIL import Image
 from IPython.display import Image as CImage
 from os import listdir
 import csv
+import matplotlib.pyplot as plt
+import numpy as np
 
 def create_database(name):
     path = os.path.dirname(os.path.abspath(__file__))
@@ -52,7 +54,7 @@ def create_database(name):
         conn.commit()
     return cur, conn
 
-def get_cities (start, end, cur, conn):
+def get_cities (start, end):
     url="https://worldpopulationreview.com/world-cities"
     html_content = requests.get(url).text
 
@@ -68,18 +70,19 @@ def get_cities (start, end, cur, conn):
         city_dict[int(key) - 1] = value
     list = [(k, v) for k, v in city_dict.items()]
 
-    for i in range(len(list)):
-        cur.execute(
-            """
-            INSERT OR IGNORE INTO Cities (ID, city)
-            VALUES (?, ?)
-            """, (int(list[i][0]), list[i][1])
-        )
-        conn.commit()
-    
     return list
 
 def get_API(city_list, cur, conn):   
+    cur.execute(
+        """
+        SELECT count(objectID) FROM Artwork
+        """
+    )
+    conn.commit()
+    data = cur.fetchall()
+    original_length = data[0][0]
+    print(original_length)
+    
     for city in city_list:
         city_id = city[0]
         city_name = city[1]
@@ -90,6 +93,12 @@ def get_API(city_list, cur, conn):
         print(ids)
         if ids == None:
             print('No artwork found for this city')
+            cur.execute(
+            """
+            INSERT OR IGNORE INTO Cities (ID, city)
+            VALUES (?, ?)
+            """, (int(city_id), city_name)
+            )
             continue
 
         objects = []
@@ -110,6 +119,20 @@ def get_API(city_list, cur, conn):
                 print(resp.json())
         
         for obj in objects:
+            cur.execute(
+                """
+                SELECT count(objectID) FROM Artwork
+                """
+            )
+            conn.commit()
+            data = cur.fetchall()
+            artwork_length = data[0][0]
+            print(artwork_length)
+
+            if artwork_length == original_length + 25:
+                print('database addition for this run is complete')
+                return(None)
+            
             try:
                 if int(obj['objectEndDate']) < 1700:
                     year_id = 1
@@ -130,12 +153,20 @@ def get_API(city_list, cur, conn):
                 print('added to database')
             except:
                 print(f"error adding {obj['objectID']}")
+
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO Cities (ID, city)
+            VALUES (?, ?)
+            """, (int(city_id), city_name)
+        )
+        conn.commit()
         print('done adding to database')
 
 def get_artwork_data(cur, conn):
     cur.execute(
         """
-        SELECT Artwork.objectID, Cities.city, Years.yearRange, Artwork.imageURL
+        SELECT Artwork.objectID, Cities.city, Years.yearRange, Artwork.imageURL, Artwork.color1
         FROM Artwork
         JOIN Cities
         ON Artwork.cityID = Cities.ID
@@ -285,21 +316,25 @@ def add_colors(cur, conn):
     image_hex_list = []
     for a in artwork:
         try:
-            cur.execute(
-                """
-                SELECT color1
-                FROM Artwork
-                WHERE color1 IS NULL
-                """
-            )
-            conn.commit()
-            checker = cur.fetchall()
-
             object_id = a[0]
             city = a[1]
             yearRange = a[2]
+            color1 = a[4]
+            print(color1)
             
-            if checker != []:
+            if color1 != None:
+                print('color already added to the database')
+                cur.execute(
+                    """
+                    SELECT color1, color2, color3
+                    FROM Artwork
+                    WHERE objectID = ?
+                    """, (object_id,)
+                )
+                conn.commit()
+                tup_colors = cur.fetchall()
+                colors = [tup_colors[0][0], tup_colors[0][1], tup_colors[0][2]]
+            else:
                 colors = get_colors(str(object_id) + '.jpg', n_colors=3)
                 cur.execute(
                     """
@@ -311,18 +346,6 @@ def add_colors(cur, conn):
                 )
                 conn.commit()
                 print(colors)
-            else:
-                print('color already added to the database')
-                cur.execute(
-                """
-                SELECT color1, color2, color3
-                FROM Artwork
-                WHERE objectID = ?
-                """, (object_id,)
-                )
-                conn.commit()
-                tup_colors = cur.fetchall()
-                colors = [tup_colors[0][0], tup_colors[0][1], tup_colors[0][2]]
 
             image_hex_list.append((object_id, city, yearRange, colors))
         except:
@@ -379,10 +402,9 @@ def make_dictionary(input_colors, cur, conn):
                 time_period_dict[timePeriod]["blue"] = time_period_dict[timePeriod].get("blue") + avg_blue
                 time_period_dict[timePeriod]["num_pieces"] += 1
 
-
         except:
             print(f'MAKE DICTIONARY ERROR. error gathering colors from {object_id}.jpg')
-            
+
     # go through city dictionary and calculate the average
     for city in city_dict:
         city_dict[city]["red"] = city_dict[city].get("red") // city_dict[city].get("num_pieces")
@@ -413,7 +435,9 @@ def write_csv(city_dict, time_period_dict):
     with open("met_time.csv", "w") as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(['time period', 'number of pieces', 'average red value', 'average green value', 'average blue value'])
-        for key in sorted(time_period_dict.keys()):
+
+        custom_sort = ['pre-1700', '1700-1799', '1800-1899', '1900-present']
+        for key in sorted(time_period_dict.keys(), key = lambda x: custom_sort.index(x)):
             time = key
             num = time_period_dict[key]['num_pieces']
             red = time_period_dict[key]['red']
@@ -421,51 +445,96 @@ def write_csv(city_dict, time_period_dict):
             blue = time_period_dict[key]['blue']
             csvwriter.writerow([time, num, red, green, blue])
 
+def visualize_data():
+    # Cities Visualization 
+    cities = []
+    red_value = []
+    green_value = []
+    blue_value = []
+    with open('met_city.csv', 'r') as csvfile:
+        csvreader = csv.reader(csvfile)
+        next(csvreader)
+        for row in csvreader:
+            cities.append(row[0])
+            red_value.append(int(row[2]))
+            green_value.append(int(row[3]))
+            blue_value.append(int(row[4]))
+
+    print(cities)
+    print(red_value)
+
+    x = np.arange(len(cities))  # the label locations
+    width = 0.2  # the width of the bars
+
+    plt.bar(x-0.2, red_value, width, color='red')
+    plt.bar(x, green_value, width, color='green')
+    plt.bar(x+0.2, blue_value, width, color='blue')
+    plt.xticks(x, cities)
+    plt.xlabel("City")
+    plt.ylabel("RGB Value")
+    plt.yscale("linear")
+    plt.ylim(0, 255)
+    plt.title('Average RGB Values in MET Artwork for Most Populated Citites')
+    plt.legend(["Average Red Value", "Average Green Value", "Average Blue Value"])
+    plt.tight_layout()
+    plt.show()
+    
+    # Time Period Visualization 
+    time = []
+    red_value = []
+    green_value = []
+    blue_value = []
+    with open('met_time.csv', 'r') as csvfile:
+        csvreader = csv.reader(csvfile)
+        next(csvreader)
+        for row in csvreader:
+            time.append(row[0])
+            red_value.append(int(row[2]))
+            green_value.append(int(row[3]))
+            blue_value.append(int(row[4]))
+
+    print(time)
+    print(red_value)
+
+    x = np.arange(len(time))  # the label locations
+    width = 0.2  # the width of the bars
+
+    plt.bar(x-0.2, red_value, width, color='red')
+    plt.bar(x, green_value, width, color='green')
+    plt.bar(x+0.2, blue_value, width, color='blue')
+    plt.xticks(x, time)
+    plt.xlabel("Time Period")
+    plt.ylabel("RGB Value")
+    plt.yscale("linear")
+    plt.ylim(0, 255)
+    plt.title('Average RGB Values in MET Artwork by Time Period')
+    plt.legend(["Average Red Value", "Average Green Value", "Average Blue Value"])
+    plt.tight_layout()
+    plt.show()
+
 def main():
     cur, conn = create_database('met.db')
 
-    # first = {'start': 0, 'end': 25}
-    # second = {'start': 25, 'end': 28}
-    # third = {'start': 28, 'end': 35}
-    # fourth = {'start': 35, 'end': 50}
-    # fifth = {'start': 50, 'end': 75}
-    # sixth = {'start': 75, 'end': 100}
+    cur.execute(
+        """
+        SELECT count(id) FROM Cities
+        """
+    )
+    conn.commit()
+    data = cur.fetchall()
+    length = data[0][0]
+    print(length)
 
-    # cur.execute(
-    #     """
-    #     SELECT count(id) FROM Cities
-    #     """
-    # )
-    # conn.commit()
-    # data = cur.fetchall()
-    # length = data[0][0]
-    # print(length)
-    
-    # if length < 25:
-    #     cities = get_cities(first['start'], first['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # elif length < 28:
-    #     cities = get_cities(second['start'], second['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # elif length < 35:
-    #     cities = get_cities(third['start'], third['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # elif length < 50:
-    #     cities = get_cities(fourth['start'], fourth['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # elif length < 75:
-    #     cities = get_cities(fifth['start'], fifth['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # else:
-    #     cities = get_cities(sixth['start'], sixth['end'], cur, conn)
-    #     print(cities)
-    #     get_API(cities, cur, conn)
-    # print('database addition complete')
+    if length < 75:   
+        cities = get_cities(length, length+25)
+        print(cities)
+        get_API(cities, cur, conn)
+    elif length < 100:
+        cities = get_cities(length, 100)
+        print(cities)
+        get_API(cities, cur, conn)
+    else:
+        print('database addition is complete')
 
     colors = add_colors(cur, conn)
     print("done adding colors")
@@ -475,11 +544,8 @@ def main():
     
     write_csv(city_dict, time_period_dict)
 
-    # visualization function 
-    # visualize(city_dict, time_period_dict) # make this
+    visualize_data()
 
-    # print(hex_to_rgb(['#e4a4e5', '#412649', '#727299']))
-    
     print('done')
 
 if __name__ == '__main__':
