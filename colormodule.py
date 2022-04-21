@@ -6,10 +6,7 @@ from math import sqrt
 import random
 
 from matplotlib import image
-try:
-  import Image
-except ImportError:
-  from PIL import Image
+from PIL import Image
 from IPython.display import Image as CImage
 import os
 from os import listdir

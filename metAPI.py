@@ -22,7 +22,7 @@ def create_database(name):
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS Artwork
-        (objectID INTEGER PRIMARY KEY, cityID INTEGER, artworkYearID INTEGER, imageURL STRING, title STRING, artistName STRING, artistNationality STRING, medium STRING, color1 STRING, color2 STRING, color3 STRING)
+        (objectID INTEGER PRIMARY KEY, cityID INTEGER, artworkYearID INTEGER, imageURL STRING, color1 STRING, color2 STRING, color3 STRING)
         """
     )
     conn.commit()
@@ -145,9 +145,9 @@ def get_API(city_list, cur, conn):
                 
                 cur.execute(
                     """
-                    INSERT OR IGNORE INTO Artwork (objectID, cityID, artworkYearID, imageURL, title, artistName, artistNationality, medium)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (obj['objectID'], city_id, year_id, obj['primaryImage'], obj['title'], obj['artistDisplayName'], obj['artistNationality'], obj['medium'])
+                    INSERT OR IGNORE INTO Artwork (objectID, cityID, artworkYearID, imageURL)
+                    VALUES (?, ?, ?, ?)
+                    """, (obj['objectID'], city_id, year_id, obj['primaryImage'])
                 )
                 conn.commit()
                 print('added to database')
@@ -525,26 +525,30 @@ def main():
     length = data[0][0]
     print(length)
 
-    if length < 75:   
+    if length < 75:
+        print('length less than 75')   
         cities = get_cities(length, length+25)
         print(cities)
         get_API(cities, cur, conn)
+        add_colors(cur, conn)
+        print("done adding colors")
     elif length < 100:
         cities = get_cities(length, 100)
         print(cities)
         get_API(cities, cur, conn)
+        add_colors(cur, conn)
+        print("done adding colors")
     else:
         print('database addition is complete')
+        colors = add_colors(cur, conn)
+        print("done adding colors")
 
-    colors = add_colors(cur, conn)
-    print("done adding colors")
-    
-    city_dict, time_period_dict = make_dictionary(colors, cur, conn)
-    print(time_period_dict)
-    
-    write_csv(city_dict, time_period_dict)
+        city_dict, time_period_dict = make_dictionary(colors, cur, conn)
+        print(time_period_dict)
+        
+        write_csv(city_dict, time_period_dict)
 
-    visualize_data()
+        visualize_data()
 
     print('done')
 

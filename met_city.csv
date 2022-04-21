@@ -1,12 +1,12 @@
 city,number of pieces,average red value,average green value,average blue value
 New York City,25,134,121,109
-Paris,25,152,148,143
-London,24,158,154,149
-Rome,17,154,145,139
-Saint Petersburg,9,138,136,133
-Moscow,7,149,143,132
-Madrid,4,153,149,141
-Cairo,2,132,121,112
-Barcelona,1,118,119,123
-Baghdad,1,158,130,100
+Paris,25,152,148,142
+London,24,157,153,148
+Rome,17,156,148,143
+Saint Petersburg,9,137,136,132
+Moscow,7,144,139,128
+Madrid,4,153,148,141
+Cairo,2,131,121,112
+Barcelona,1,118,118,122
+Baghdad,1,179,157,131
 Istanbul,1,150,131,99
