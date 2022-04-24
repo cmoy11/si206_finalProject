@@ -301,12 +301,6 @@ def hex_to_rgb(initial_hex_list):
         final_rgbs.append(rgb)
     return final_rgbs
 
-# print(hex_to_dec(['#e4e4e4', '#414141', '#727272']))
-
-# def get_color(file):
-#     colors = get_colors(file, n_colors=5)
-#     return colors
-
 def add_colors(cur, conn):
     artwork = get_artwork_data(cur, conn)
 
@@ -358,7 +352,7 @@ def add_colors(cur, conn):
     return image_hex_list
 
 # make sure this function is called after add_colors so then you won't have to all download_image again
-def make_dictionary(input_colors, cur, conn):
+def make_dictionary(input_colors):
     city_dict = {}
     time_period_dict = {}
 
@@ -416,8 +410,6 @@ def make_dictionary(input_colors, cur, conn):
         time_period_dict[time_period]["green"] = time_period_dict[time_period].get("green") // time_period_dict[time_period].get("num_pieces")
         time_period_dict[time_period]["blue"] = time_period_dict[time_period].get("blue") // time_period_dict[time_period].get("num_pieces")
     
-    # print(city_dict)
-    # print(time_period_dict)
     return city_dict, time_period_dict
 
 def write_csv(city_dict, time_period_dict):
@@ -543,7 +535,7 @@ def main():
         colors = add_colors(cur, conn)
         print("done adding colors")
 
-        city_dict, time_period_dict = make_dictionary(colors, cur, conn)
+        city_dict, time_period_dict = make_dictionary(colors)
         print(time_period_dict)
         
         write_csv(city_dict, time_period_dict)
